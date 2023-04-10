@@ -69,7 +69,8 @@ impl<'w> PrefabBuilder<'w> {
                     .and_then(|registration| registration.data::<ReflectComponent>());
 
                 if let Some(reflect_component) = reflect_component {
-                    if let Some(component) = reflect_component.reflect(self.world, entity) {
+                    let entity = self.world.entity(entity);
+                    if let Some(component) = reflect_component.reflect(entity) {
                         entry.components.push(component.clone_value());
                     }
                 }

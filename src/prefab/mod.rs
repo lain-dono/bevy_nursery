@@ -18,11 +18,11 @@ pub use self::spawner::{
 };
 
 use bevy::{
-    app::{App, AppTypeRegistry, CoreStage, Plugin},
+    app::{App, AppTypeRegistry, CoreSet, Plugin},
     asset::{AddAsset, Handle},
     ecs::entity::{Entity, EntityMap},
     ecs::reflect::{ReflectComponent, ReflectMapEntities},
-    ecs::schedule::IntoSystemDescriptor,
+    ecs::schedule::IntoSystemConfig,
     ecs::world::World,
     reflect::GetPath,
     utils::{tracing::error, HashMap},
@@ -35,11 +35,8 @@ impl Plugin for PrefabPlugin {
         app.add_asset::<Prefab>()
             .init_asset_loader::<PrefabLoader>()
             .init_resource::<PrefabSpawner>()
-            .add_system_to_stage(CoreStage::PreUpdate, self::prefab_update_system)
-            .add_system_to_stage(
-                CoreStage::PreUpdate,
-                self::prefab_spawner_maintain_system.at_end(),
-            );
+            .add_system(self::prefab_update_system.in_base_set(CoreSet::PreUpdate))
+            .add_system(self::prefab_spawner_maintain_system.in_base_set(CoreSet::Update));
     }
 }
 
@@ -76,6 +73,7 @@ pub fn write_to_world(
         let entity = entity_map.entry(Entity::from_raw(prefab_entity.entity));
         // or spawn a new entity with a transiently unique id if there is no corresponding entry.
         let entity = *entity.or_insert_with(|| world.spawn_empty().id());
+        let mut entity = world.entity_mut(entity);
 
         let patch = patch_map.remove(&prefab_entity.entity);
 
@@ -99,7 +97,7 @@ pub fn write_to_world(
                     _clone = component.clone_value();
 
                     for (path, value) in modify {
-                        let field = _clone.path_mut(path);
+                        let field = _clone.reflect_path_mut(path);
                         let field = field.map_err(|err| PrefabError::PatchContainsWrongPath {
                             path: path.clone(),
                             err: err.to_string(),
@@ -117,7 +115,7 @@ pub fn write_to_world(
             })?;
 
             if let Some(proxy) = registration.data::<ReflectPrefabComponent>() {
-                proxy.apply_insert(world, entity, component);
+                proxy.apply_insert(&mut entity, component);
                 continue;
             }
 
@@ -129,7 +127,7 @@ pub fn write_to_world(
             // If the entity already has the given component attached,
             // just apply the (possibly) new value,
             // otherwise add the component to the entity.
-            reflect.apply_or_insert(world, entity, component);
+            reflect.apply_or_insert(&mut entity, component);
         }
     }
 
@@ -138,6 +136,7 @@ pub fn write_to_world(
         let entity = entity_map.entry(Entity::from_raw(patch.entity));
         // or spawn a new entity with a transiently unique id if there is no corresponding entry.
         let entity = *entity.or_insert_with(|| world.spawn_empty().id());
+        let mut entity = world.entity_mut(entity);
 
         for component in patch.append.iter().map(AsRef::as_ref) {
             let type_name = component.type_name();
@@ -148,7 +147,7 @@ pub fn write_to_world(
             })?;
 
             if let Some(proxy) = registration.data::<ReflectPrefabComponent>() {
-                proxy.apply_insert(world, entity, component);
+                proxy.apply_insert(&mut entity, component);
                 continue;
             }
 
@@ -161,7 +160,7 @@ pub fn write_to_world(
             // If the entity already has the given component attached,
             // just apply the (possibly) new value,
             // otherwise add the component to the entity.
-            reflect.apply_or_insert(world, entity, component);
+            reflect.apply_or_insert(&mut entity, component);
         }
     }
 

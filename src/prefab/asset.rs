@@ -5,8 +5,7 @@ use super::{
 use bevy::{
     app::AppTypeRegistry,
     asset::{AssetLoader, BoxedFuture, Error, LoadContext, LoadedAsset},
-    ecs::entity::Entity,
-    ecs::world::{FromWorld, World},
+    ecs::world::{EntityMut, FromWorld, World},
     reflect::{FromType, Reflect, TypeRegistryArc, TypeUuid},
     utils::{HashMap, HashSet},
 };
@@ -36,7 +35,7 @@ impl Prefab {
     pub fn from_world(world: &World, registry: &AppTypeRegistry) -> Self {
         let mut builder = PrefabBuilder::from_world_with_registry(world, registry.clone());
 
-        builder.extract_entities(world.iter_entities());
+        builder.extract_entities(world.iter_entities().map(|entity| entity.id()));
 
         builder.build()
     }
@@ -67,27 +66,27 @@ pub struct PrefabEntity {
 }
 
 pub trait PrefabComponent {
-    fn insert(self, world: &mut World, entity: Entity);
+    fn insert(self, entity: &mut EntityMut);
 }
 
 #[derive(Clone)]
 pub struct ReflectPrefabComponent {
-    apply_insert: fn(&mut World, Entity, &dyn Reflect),
+    apply_insert: fn(&mut EntityMut, &dyn Reflect),
 }
 
 impl ReflectPrefabComponent {
-    pub fn apply_insert(&self, world: &mut World, entity: Entity, proxy: &dyn Reflect) {
-        (self.apply_insert)(world, entity, proxy);
+    pub fn apply_insert(&self, entity: &mut EntityMut, proxy: &dyn Reflect) {
+        (self.apply_insert)(entity, proxy);
     }
 }
 
 impl<T: PrefabComponent + FromWorld + Reflect> FromType<T> for ReflectPrefabComponent {
     fn from_type() -> Self {
         Self {
-            apply_insert: |world, entity, reflect| {
-                let mut proxy = T::from_world(world);
+            apply_insert: |entity, reflect| {
+                let mut proxy = T::from_world(unsafe { entity.world_mut() });
                 proxy.apply(reflect);
-                proxy.insert(world, entity);
+                proxy.insert(entity);
             },
         }
     }
