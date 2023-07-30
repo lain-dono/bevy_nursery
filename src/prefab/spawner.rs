@@ -234,7 +234,7 @@ impl PrefabSpawner {
                         // this case shouldn't happen anyway
                         .unwrap_or(true)
                     {
-                        AddChild { parent, child }.write(world);
+                        AddChild { parent, child }.apply(world);
                     }
                 }
                 false

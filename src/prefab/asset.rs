@@ -3,10 +3,10 @@ use super::{
     serde::{PrefabDeserializer, PrefabSerializer},
 };
 use bevy::{
-    app::AppTypeRegistry,
     asset::{AssetLoader, BoxedFuture, Error, LoadContext, LoadedAsset},
+    ecs::reflect::AppTypeRegistry,
     ecs::world::{EntityMut, FromWorld, World},
-    reflect::{FromType, Reflect, TypeRegistryArc, TypeUuid},
+    reflect::{FromType, Reflect, TypePath, TypeRegistryArc, TypeUuid},
     utils::{HashMap, HashSet},
 };
 
@@ -24,7 +24,7 @@ pub struct PatchEntity {
     pub remove: HashSet<String>,
 }
 
-#[derive(Default, TypeUuid)]
+#[derive(Default, TypeUuid, TypePath)]
 #[uuid = "28dd2ec1-5d0c-41af-b0ea-d6bf557a4279"]
 pub struct Prefab {
     pub entities: Vec<PrefabEntity>,

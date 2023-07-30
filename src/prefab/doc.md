@@ -4,11 +4,14 @@
 use bevy_nursery::prefab::{PrefabComponent, ReflectPrefabComponent};
 use bevy::{
     asset::{Asset, AssetPath, AssetServer, Handle},
-    ecs::{component::Component, entity::Entity, reflect::ReflectComponent, world::World},
-    reflect::{FromReflect, Reflect},
+    ecs::component::Component,
+    ecs::entity::Entity,
+    ecs::reflect::ReflectComponent,
+    ecs::world::{World, EntityMut},
+    reflect::Reflect,
 };
 
-#[derive(Component, Reflect, FromReflect)]
+#[derive(Component, Reflect)]
 #[reflect(Component, PrefabComponent)]
 pub struct PrefabHandle<T: Asset> {
     pub path: String,
@@ -36,11 +39,11 @@ impl<T: Asset> Default for PrefabHandle<T> {
 }
 
 impl<T: Asset> PrefabComponent for PrefabHandle<T> {
-    fn insert(self, world: &mut World, entity: Entity) {
-        if let Some(asset_server) = world.get_resource::<AssetServer>() {
+    fn insert(self, entity: &mut EntityMut) {
+        if let Some(asset_server) = entity.world().get_resource::<AssetServer>() {
             let path = AssetPath::from(&self.path);
             let bundle: Handle<T> = asset_server.load(path);
-            world.entity_mut(entity).insert(bundle);
+            entity.insert(bundle);
         }
     }
 }

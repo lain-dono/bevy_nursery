@@ -5,6 +5,8 @@ mod builder;
 mod serde;
 mod spawner;
 
+use std::any::TypeId;
+
 pub use self::asset::{
     Patch, PatchEntity, Prefab, PrefabComponent, PrefabEntity, PrefabLoader, ReflectPrefabComponent,
 };
@@ -18,11 +20,10 @@ pub use self::spawner::{
 };
 
 use bevy::{
-    app::{App, AppTypeRegistry, CoreSet, Plugin},
+    app::{App, Plugin, PreUpdate, Update},
     asset::{AddAsset, Handle},
     ecs::entity::{Entity, EntityMap},
-    ecs::reflect::{ReflectComponent, ReflectMapEntities},
-    ecs::schedule::IntoSystemConfig,
+    ecs::reflect::{AppTypeRegistry, ReflectComponent, ReflectMapEntities},
     ecs::world::World,
     reflect::GetPath,
     utils::{tracing::error, HashMap},
@@ -35,8 +36,8 @@ impl Plugin for PrefabPlugin {
         app.add_asset::<Prefab>()
             .init_asset_loader::<PrefabLoader>()
             .init_resource::<PrefabSpawner>()
-            .add_system(self::prefab_update_system.in_base_set(CoreSet::PreUpdate))
-            .add_system(self::prefab_spawner_maintain_system.in_base_set(CoreSet::Update));
+            .add_systems(PreUpdate, self::prefab_update_system)
+            .add_systems(Update, self::prefab_spawner_maintain_system);
     }
 }
 
@@ -62,6 +63,12 @@ pub fn write_to_world(
     let registry = registry.read();
 
     let mut patch_map: HashMap<_, _> = patch.modify.iter().map(|e| (e.entity, e)).collect();
+
+    // For each component types that reference other entities, we keep track
+    // of which entities in the scene use that component.
+    // This is so we can update the scene-internal references to references
+    // of the actual entities in the world.
+    let mut scene_mappings: HashMap<TypeId, Vec<Entity>> = HashMap::default();
 
     for prefab_entity in &prefab.entities {
         // ignore despawned entities
@@ -124,6 +131,15 @@ pub fn write_to_world(
                 type_name: type_name.to_string(),
             })?;
 
+            // If this component references entities in the scene, track it
+            // so we can update it to the entity in the world.
+            if registration.data::<ReflectMapEntities>().is_some() {
+                scene_mappings
+                    .entry(registration.type_id())
+                    .or_insert(Vec::new())
+                    .push(entity.id());
+            }
+
             // If the entity already has the given component attached,
             // just apply the (possibly) new value,
             // otherwise add the component to the entity.
@@ -157,6 +173,15 @@ pub fn write_to_world(
                 }
             })?;
 
+            // If this component references entities in the scene, track it
+            // so we can update it to the entity in the world.
+            if registration.data::<ReflectMapEntities>().is_some() {
+                scene_mappings
+                    .entry(registration.type_id())
+                    .or_insert(Vec::new())
+                    .push(entity.id());
+            }
+
             // If the entity already has the given component attached,
             // just apply the (possibly) new value,
             // otherwise add the component to the entity.
@@ -164,9 +189,13 @@ pub fn write_to_world(
         }
     }
 
-    for registration in registry.iter() {
-        if let Some(reflect) = registration.data::<ReflectMapEntities>() {
-            reflect.map_entities(world, entity_map).unwrap();
+    // Updates references to entities in the scene to entities in the world
+    for (type_id, entities) in scene_mappings.into_iter() {
+        let registration = registry
+            .get(type_id)
+            .expect("we should be getting TypeId from this TypeRegistration in the first place");
+        if let Some(map_entities_reflect) = registration.data::<ReflectMapEntities>() {
+            map_entities_reflect.map_entities(world, entity_map, &entities);
         }
     }
 

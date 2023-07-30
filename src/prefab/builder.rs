@@ -1,6 +1,9 @@
 use super::{Prefab, PrefabEntity};
-use bevy::app::AppTypeRegistry;
-use bevy::ecs::{entity::Entity, reflect::ReflectComponent, world::World};
+use bevy::ecs::{
+    entity::Entity,
+    reflect::{AppTypeRegistry, ReflectComponent},
+    world::World,
+};
 use bevy::utils::{default, HashMap};
 
 /// A [`Prefab`] builder, used to build a scene from a [`World`] by extracting some entities.
@@ -87,9 +90,12 @@ impl<'w> PrefabBuilder<'w> {
 #[cfg(test)]
 mod tests {
     use super::PrefabBuilder;
-    use bevy::app::AppTypeRegistry;
     use bevy::ecs::{
-        component::Component, prelude::Entity, query::With, reflect::ReflectComponent, world::World,
+        component::Component,
+        prelude::Entity,
+        query::With,
+        reflect::{AppTypeRegistry, ReflectComponent},
+        world::World,
     };
     use bevy::reflect::Reflect;
 
